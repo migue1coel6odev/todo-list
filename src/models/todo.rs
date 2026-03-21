@@ -49,7 +49,6 @@ pub struct Todo {
 pub struct CreateTodo {
     pub title: String,
     pub category: Option<String>,
-    pub user_id: Option<i64>,
     pub is_recurrent: Option<bool>,
     pub recurrency: Option<String>,
     pub status: Option<Status>,
@@ -59,7 +58,6 @@ pub struct CreateTodo {
 pub struct UpdateTodo {
     pub title: Option<String>,
     pub category: Option<String>,
-    pub user_id: Option<i64>,
     pub is_recurrent: Option<bool>,
     pub recurrency: Option<String>,
     pub status: Option<Status>,

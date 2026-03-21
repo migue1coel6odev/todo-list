@@ -1,4 +1,6 @@
 mod db;
+mod extractor;
+mod jwt;
 mod models;
 mod routes;
 
@@ -9,12 +11,14 @@ pub type AppState = Arc<Mutex<Connection>>;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    dotenvy::dotenv().ok();
     tracing_subscriber::fmt::init();
 
     let conn = db::init().expect("Failed to initialize database");
     let state: AppState = Arc::new(Mutex::new(conn));
 
     let app = axum::Router::new()
+        .nest("/auth", routes::auth::router())
         .nest("/todos", routes::todos::router())
         .nest("/users", routes::users::router())
         .with_state(state);

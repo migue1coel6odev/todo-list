@@ -11,3 +11,5 @@ rusqlite_migration = "2.4.1"
 tokio = { version = "1.50.0", features = ["full"] }
 tracing-subscriber = "0.3.23"
 bcrypt = "0.17"
+dotenvy = "0.15"
+jsonwebtoken = "9"

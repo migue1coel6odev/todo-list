@@ -6,6 +6,7 @@ use axum::{
 };
 use bcrypt::{hash, DEFAULT_COST};
 use crate::{
+    extractor::AuthUser,
     models::{CreateUser, UpdateUser, User, UserRole},
     AppState,
 };
@@ -29,7 +30,13 @@ fn row_to_user(row: &rusqlite::Row) -> rusqlite::Result<User> {
 
 const SELECT: &str = "SELECT id, nickname, email, role FROM users";
 
-async fn list_users(State(db): State<AppState>) -> Result<Json<Vec<User>>, StatusCode> {
+async fn list_users(
+    State(db): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<Vec<User>>, StatusCode> {
+    if !auth.is_admin() {
+        return Err(StatusCode::FORBIDDEN);
+    }
     let conn = db.lock().unwrap();
     let mut stmt = conn
         .prepare(SELECT)
@@ -44,26 +51,32 @@ async fn list_users(State(db): State<AppState>) -> Result<Json<Vec<User>>, Statu
 
 async fn get_user(
     State(db): State<AppState>,
+    auth: AuthUser,
     Path(id): Path<i64>,
 ) -> Result<Json<User>, StatusCode> {
+    if !auth.is_admin() && auth.0.sub != id {
+        return Err(StatusCode::FORBIDDEN);
+    }
     let conn = db.lock().unwrap();
-    conn.query_row(
-        &format!("{SELECT} WHERE id = ?1"),
-        [id],
-        row_to_user,
-    )
-    .map(Json)
-    .map_err(|_| StatusCode::NOT_FOUND)
+    conn.query_row(&format!("{SELECT} WHERE id = ?1"), [id], row_to_user)
+        .map(Json)
+        .map_err(|_| StatusCode::NOT_FOUND)
 }
 
 async fn create_user(
     State(db): State<AppState>,
+    auth: AuthUser,
     Json(payload): Json<CreateUser>,
 ) -> Result<(StatusCode, Json<User>), StatusCode> {
+    let role = payload.role.unwrap_or(UserRole::User);
+
+    if matches!(role, UserRole::Admin) && !auth.is_admin() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     let hashed = hash(&payload.password, DEFAULT_COST)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let conn = db.lock().unwrap();
-    let role = payload.role.unwrap_or(UserRole::User);
     conn.execute(
         "INSERT INTO users (nickname, email, password, role) VALUES (?1, ?2, ?3, ?4)",
         rusqlite::params![payload.nickname, payload.email, hashed, role.as_str()],
@@ -76,9 +89,18 @@ async fn create_user(
 
 async fn update_user(
     State(db): State<AppState>,
+    auth: AuthUser,
     Path(id): Path<i64>,
     Json(payload): Json<UpdateUser>,
 ) -> Result<Json<User>, StatusCode> {
+    if !auth.is_admin() && auth.0.sub != id {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    if matches!(payload.role, Some(UserRole::Admin)) && !auth.is_admin() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     let conn = db.lock().unwrap();
     macro_rules! update_field {
         ($field:expr, $value:expr) => {
@@ -98,19 +120,19 @@ async fn update_user(
     }
     if let Some(v) = payload.role { update_field!("role", v.as_str()); }
 
-    conn.query_row(
-        &format!("{SELECT} WHERE id = ?1"),
-        [id],
-        row_to_user,
-    )
-    .map(Json)
-    .map_err(|_| StatusCode::NOT_FOUND)
+    conn.query_row(&format!("{SELECT} WHERE id = ?1"), [id], row_to_user)
+        .map(Json)
+        .map_err(|_| StatusCode::NOT_FOUND)
 }
 
 async fn delete_user(
     State(db): State<AppState>,
+    auth: AuthUser,
     Path(id): Path<i64>,
 ) -> StatusCode {
+    if !auth.is_admin() {
+        return StatusCode::FORBIDDEN;
+    }
     let conn = db.lock().unwrap();
     match conn.execute("DELETE FROM users WHERE id = ?1", [id]) {
         Ok(0) => StatusCode::NOT_FOUND,
