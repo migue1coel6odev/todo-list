@@ -7,6 +7,7 @@ mod routes;
 use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
 use tower_http::cors::{CorsLayer, Any};
+use tower_http::services::{ServeDir, ServeFile};
 
 pub type AppState = Arc<Mutex<Connection>>;
 
@@ -23,10 +24,14 @@ async fn main() {
         .allow_methods(Any)
         .allow_headers(Any);
 
+    let serve_dir = ServeDir::new("public")
+        .not_found_service(ServeFile::new("public/index.html"));
+
     let app = axum::Router::new()
         .nest("/auth", routes::auth::router())
         .nest("/todos", routes::todos::router())
         .nest("/users", routes::users::router())
+        .fallback_service(serve_dir)
         .layer(cors)
         .with_state(state);
 
