@@ -13,6 +13,15 @@ const MIGRATIONS: &[M] = &[
             status       TEXT    NOT NULL DEFAULT 'TODO'
         );",
     ),
+    M::up(
+        "CREATE TABLE users (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            nickname TEXT    NOT NULL UNIQUE,
+            email    TEXT    NOT NULL UNIQUE,
+            password TEXT    NOT NULL,
+            role     TEXT    NOT NULL DEFAULT 'USER'
+        );",
+    ),
 ];
 
 pub fn init() -> rusqlite::Result<Connection> {

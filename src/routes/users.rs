@@ -1,0 +1,120 @@
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    routing::get,
+    Json, Router,
+};
+use bcrypt::{hash, DEFAULT_COST};
+use crate::{
+    models::{CreateUser, UpdateUser, User, UserRole},
+    AppState,
+};
+
+pub fn router() -> Router<AppState> {
+    Router::new()
+        .route("/", get(list_users).post(create_user))
+        .route("/{id}", get(get_user).put(update_user).delete(delete_user))
+}
+
+fn row_to_user(row: &rusqlite::Row) -> rusqlite::Result<User> {
+    let role_str: String = row.get(3)?;
+    let role = UserRole::try_from(role_str).unwrap_or(UserRole::User);
+    Ok(User {
+        id: row.get(0)?,
+        nickname: row.get(1)?,
+        email: row.get(2)?,
+        role,
+    })
+}
+
+const SELECT: &str = "SELECT id, nickname, email, role FROM users";
+
+async fn list_users(State(db): State<AppState>) -> Result<Json<Vec<User>>, StatusCode> {
+    let conn = db.lock().unwrap();
+    let mut stmt = conn
+        .prepare(SELECT)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let users = stmt
+        .query_map([], row_to_user)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(Json(users))
+}
+
+async fn get_user(
+    State(db): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<User>, StatusCode> {
+    let conn = db.lock().unwrap();
+    conn.query_row(
+        &format!("{SELECT} WHERE id = ?1"),
+        [id],
+        row_to_user,
+    )
+    .map(Json)
+    .map_err(|_| StatusCode::NOT_FOUND)
+}
+
+async fn create_user(
+    State(db): State<AppState>,
+    Json(payload): Json<CreateUser>,
+) -> Result<(StatusCode, Json<User>), StatusCode> {
+    let hashed = hash(&payload.password, DEFAULT_COST)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let conn = db.lock().unwrap();
+    let role = payload.role.unwrap_or(UserRole::User);
+    conn.execute(
+        "INSERT INTO users (nickname, email, password, role) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![payload.nickname, payload.email, hashed, role.as_str()],
+    )
+    .map_err(|_| StatusCode::CONFLICT)?;
+    let id = conn.last_insert_rowid();
+    let user = User { id, nickname: payload.nickname, email: payload.email, role };
+    Ok((StatusCode::CREATED, Json(user)))
+}
+
+async fn update_user(
+    State(db): State<AppState>,
+    Path(id): Path<i64>,
+    Json(payload): Json<UpdateUser>,
+) -> Result<Json<User>, StatusCode> {
+    let conn = db.lock().unwrap();
+    macro_rules! update_field {
+        ($field:expr, $value:expr) => {
+            conn.execute(
+                &format!("UPDATE users SET {} = ?1 WHERE id = ?2", $field),
+                rusqlite::params![$value, id],
+            )
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        };
+    }
+    if let Some(v) = payload.nickname { update_field!("nickname", v); }
+    if let Some(v) = payload.email { update_field!("email", v); }
+    if let Some(v) = payload.password {
+        let hashed = hash(&v, DEFAULT_COST)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        update_field!("password", hashed);
+    }
+    if let Some(v) = payload.role { update_field!("role", v.as_str()); }
+
+    conn.query_row(
+        &format!("{SELECT} WHERE id = ?1"),
+        [id],
+        row_to_user,
+    )
+    .map(Json)
+    .map_err(|_| StatusCode::NOT_FOUND)
+}
+
+async fn delete_user(
+    State(db): State<AppState>,
+    Path(id): Path<i64>,
+) -> StatusCode {
+    let conn = db.lock().unwrap();
+    match conn.execute("DELETE FROM users WHERE id = ?1", [id]) {
+        Ok(0) => StatusCode::NOT_FOUND,
+        Ok(_) => StatusCode::NO_CONTENT,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
