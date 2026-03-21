@@ -41,7 +41,7 @@ export default function LoginPage() {
       {/* Logo / title */}
       <div className="mb-12 text-center">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl
-          bg-gradient-to-br from-purple to-pink mb-4 shadow-lg shadow-purple/30">
+          bg-linear-to-br from-purple to-pink mb-4 shadow-lg shadow-purple/30">
           <svg viewBox="0 0 24 24" className="w-8 h-8 fill-white">
             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
           </svg>
@@ -85,7 +85,7 @@ export default function LoginPage() {
           type="submit"
           disabled={loading}
           className="mt-4 py-4 rounded-xl font-semibold text-white
-            bg-gradient-to-r from-purple to-pink shadow-lg shadow-purple/30
+            bg-linear-to-r from-purple to-pink shadow-lg shadow-purple/30
             active:scale-95 transition-all disabled:opacity-60"
         >
           {loading ? 'Signing in…' : 'Sign in'}

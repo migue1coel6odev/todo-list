@@ -9,6 +9,7 @@ import TaskItem from '../components/TaskItem'
 import AddTodoModal from '../components/AddTodoModal'
 import SearchOverlay from '../components/SearchOverlay'
 import CategoriesView from '../components/CategoriesView'
+import { useNotifications } from '../hooks/useNotifications'
 import AnalyticsView from '../components/AnalyticsView'
 import UsersView from '../components/UsersView'
 
@@ -33,6 +34,8 @@ export default function OverviewPage() {
     : todos
 
   const blockedCount = todos.filter(t => t.status === 'BLOCKED' || t.status === 'ON_HOLD').length
+
+  useNotifications(todos)
 
   async function handleToggle(todo: Todo) {
     const next = todo.status === 'DONE' ? 'TODO' : 'DONE'

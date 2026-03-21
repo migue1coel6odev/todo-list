@@ -1,11 +1,19 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import type { CreateTodo } from '../types'
+import { describeCron, isValidCron } from '../utils/cron'
 
 interface Props {
   onClose: () => void
   onAdd: (data: CreateTodo) => void
 }
+
+const CRON_PRESETS = [
+  { label: 'Every day',    value: '0 9 * * *'   },
+  { label: 'Weekdays',     value: '0 9 * * 1-5' },
+  { label: 'Every Monday', value: '0 9 * * 1'   },
+  { label: 'Monthly',      value: '0 9 1 * *'   },
+]
 
 export default function AddTodoModal({ onClose, onAdd }: Props) {
   const [title, setTitle] = useState('')
@@ -13,9 +21,13 @@ export default function AddTodoModal({ onClose, onAdd }: Props) {
   const [isRecurrent, setIsRecurrent] = useState(false)
   const [recurrency, setRecurrency] = useState('')
 
+  const cronValid = !recurrency || isValidCron(recurrency)
+  const cronPreview = recurrency && isValidCron(recurrency) ? describeCron(recurrency) : null
+
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim()) return
+    if (isRecurrent && recurrency && !isValidCron(recurrency)) return
     onAdd({
       title: title.trim(),
       category: category.trim() || undefined,
@@ -41,6 +53,7 @@ export default function AddTodoModal({ onClose, onAdd }: Props) {
             placeholder="Task title"
             value={title}
             onChange={e => setTitle(e.target.value)}
+            required
             className="w-full bg-card2 rounded-xl px-4 py-3 text-white text-sm placeholder:text-muted outline-none focus:ring-2 focus:ring-purple"
           />
 
@@ -51,6 +64,7 @@ export default function AddTodoModal({ onClose, onAdd }: Props) {
             className="w-full bg-card2 rounded-xl px-4 py-3 text-white text-sm placeholder:text-muted outline-none focus:ring-2 focus:ring-purple"
           />
 
+          {/* recurring toggle */}
           <label className="flex items-center gap-3 px-1 cursor-pointer">
             <div
               onClick={() => setIsRecurrent(v => !v)}
@@ -62,18 +76,56 @@ export default function AddTodoModal({ onClose, onAdd }: Props) {
           </label>
 
           {isRecurrent && (
-            <input
-              placeholder="Recurrence (e.g. daily, weekly)"
-              value={recurrency}
-              onChange={e => setRecurrency(e.target.value)}
-              className="w-full bg-card2 rounded-xl px-4 py-3 text-white text-sm placeholder:text-muted outline-none focus:ring-2 focus:ring-purple"
-            />
+            <div className="flex flex-col gap-2">
+              {/* presets */}
+              <div className="flex gap-2 flex-wrap">
+                {CRON_PRESETS.map(p => (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => setRecurrency(p.value)}
+                    className={`text-xs px-3 py-1.5 rounded-lg transition-colors
+                      ${recurrency === p.value
+                        ? 'bg-purple text-white'
+                        : 'bg-card2 text-muted hover:text-white'}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* cron input */}
+              <div className="relative">
+                <input
+                  placeholder="Cron expression  e.g. 0 9 * * 1-5"
+                  value={recurrency}
+                  onChange={e => setRecurrency(e.target.value)}
+                  className={`w-full bg-card2 rounded-xl px-4 py-3 text-white text-sm font-mono
+                    placeholder:text-muted outline-none focus:ring-2 transition-all
+                    ${cronValid ? 'focus:ring-purple' : 'ring-2 ring-red-400'}`}
+                />
+              </div>
+
+              {/* live preview */}
+              {cronPreview && (
+                <p className="text-xs text-purple px-1">{cronPreview}</p>
+              )}
+              {recurrency && !cronValid && (
+                <p className="text-xs text-red-400 px-1">
+                  Invalid cron — format: <span className="font-mono">min hour dom month dow</span>
+                </p>
+              )}
+
+              <p className="text-[11px] text-muted px-1">
+                Fields: minute · hour · day-of-month · month · day-of-week (0=Sun)
+              </p>
+            </div>
           )}
 
           <button
             type="submit"
             className="mt-2 w-full py-3 rounded-xl font-semibold text-white text-sm
-              bg-gradient-to-r from-purple to-pink shadow-lg shadow-purple/30
+              bg-linear-to-r from-purple to-pink shadow-lg shadow-purple/30
               active:scale-95 transition-transform"
           >
             Add Task

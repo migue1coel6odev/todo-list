@@ -1,5 +1,6 @@
-import { Trash2 } from 'lucide-react'
+import { Trash2, RefreshCw } from 'lucide-react'
 import type { Todo } from '../types'
+import { describeCron } from '../utils/cron'
 
 interface Props {
   todo: Todo
@@ -18,10 +19,10 @@ export default function TaskItem({ todo, onToggle, onDelete }: Props) {
   const done = todo.status === 'DONE'
 
   return (
-    <div className="flex items-center gap-4 px-4 py-3 rounded-2xl bg-card2 group">
+    <div className="flex items-start gap-4 px-4 py-3 rounded-2xl bg-card2 group w-full">
       <button
         onClick={onToggle}
-        className={`shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all
+        className={`shrink-0 mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all
           ${statusColor[todo.status]}`}
       >
         {done && (
@@ -31,16 +32,24 @@ export default function TaskItem({ todo, onToggle, onDelete }: Props) {
         )}
       </button>
 
-      <span className={`flex-1 text-sm font-medium text-left ${done ? 'line-through text-muted' : 'text-white'}`}>
-        {todo.title}
+      <div className="flex-1 min-w-0">
+        <span className={`text-sm font-medium ${done ? 'line-through text-muted' : 'text-white'}`}>
+          {todo.title}
+        </span>
         {todo.category && (
           <span className="ml-2 text-xs text-purple font-normal">#{todo.category}</span>
         )}
-      </span>
+        {todo.is_recurrent && todo.recurrency && (
+          <p className="flex items-center gap-1 text-[11px] text-muted mt-0.5">
+            <RefreshCw size={10} className="shrink-0" />
+            {describeCron(todo.recurrency)}
+          </p>
+        )}
+      </div>
 
       <button
         onClick={onDelete}
-        className="opacity-0 group-hover:opacity-100 text-muted hover:text-pink transition-all"
+        className="opacity-0 group-hover:opacity-100 text-muted hover:text-pink transition-all mt-0.5 shrink-0"
       >
         <Trash2 size={15} />
       </button>

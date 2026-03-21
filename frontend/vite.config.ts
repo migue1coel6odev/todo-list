@@ -14,6 +14,21 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'icon.svg', 'apple-touch-icon-180x180.png'],
+        workbox: {
+          runtimeCaching: [
+            {
+              urlPattern: ({ url }: { url: URL }) =>
+                ['/todos', '/users'].some(p => url.pathname.startsWith(p)),
+              handler: 'NetworkFirst' as const,
+              options: {
+                cacheName: 'api-cache',
+                networkTimeoutSeconds: 5,
+                expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+          ],
+        },
         manifest: {
           name: 'TodoList',
           short_name: 'Todos',

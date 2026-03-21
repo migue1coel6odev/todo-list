@@ -40,7 +40,7 @@ export default function Sidebar({ open, onClose, activeView, onNavigate }: Props
 
         <div className="flex flex-col items-center gap-3 mb-10">
           <div className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold
-            bg-gradient-to-br from-purple to-pink text-white ring-4 ring-purple/30">
+            bg-linear-to-br from-purple to-pink text-white ring-4 ring-purple/30">
             {initials}
           </div>
           <p className="text-white font-semibold text-lg">{auth?.nickname}</p>

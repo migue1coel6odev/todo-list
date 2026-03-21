@@ -20,7 +20,7 @@ export default function UsersView() {
     <div className="flex flex-col gap-4">
       {users.map(user => (
         <div key={user.id} className="flex items-center gap-4 bg-card2 px-4 py-3 rounded-2xl">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple to-pink
+          <div className="w-10 h-10 rounded-full bg-linear-to-br from-purple to-pink
             flex items-center justify-center text-sm font-bold text-white shrink-0">
             {user.nickname.slice(0, 2).toUpperCase()}
           </div>
@@ -133,7 +133,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             type="submit"
             disabled={loading}
             className="mt-2 w-full py-3 rounded-xl font-semibold text-white text-sm
-              bg-gradient-to-r from-purple to-pink shadow-lg shadow-purple/30
+              bg-linear-to-r from-purple to-pink shadow-lg shadow-purple/30
               active:scale-95 transition-all disabled:opacity-60"
           >
             {loading ? 'Creating…' : 'Create User'}
