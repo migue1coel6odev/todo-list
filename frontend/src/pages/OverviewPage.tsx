@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Menu, Search, Bell, Plus } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Menu, Search, Bell, Plus, WifiOff, RefreshCw } from 'lucide-react'
 import { getTodos, updateTodo, deleteTodo, createTodo } from '../api/todos'
 import type { Todo, CreateTodo } from '../types'
 import { useAuth } from '../context/AuthContext'
@@ -9,9 +9,11 @@ import TaskItem from '../components/TaskItem'
 import AddTodoModal from '../components/AddTodoModal'
 import SearchOverlay from '../components/SearchOverlay'
 import CategoriesView from '../components/CategoriesView'
-import { useNotifications } from '../hooks/useNotifications'
 import AnalyticsView from '../components/AnalyticsView'
 import UsersView from '../components/UsersView'
+import { useNotifications } from '../hooks/useNotifications'
+import { useOnlineStatus } from '../hooks/useOnlineStatus'
+import { enqueue, getQueue, clearQueue, tempId, type QueuedOp } from '../utils/offlineQueue'
 
 export default function OverviewPage() {
   const { auth } = useAuth()
@@ -22,35 +24,97 @@ export default function OverviewPage() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [view, setView] = useState<View>('overview')
+  const [pendingOps, setPendingOps] = useState(() => getQueue().length)
+  const [syncing, setSyncing] = useState(false)
+
+  const isOnline = useOnlineStatus()
+  const { permission, requestPermission } = useNotifications(todos)
 
   useEffect(() => {
     getTodos().then(setTodos).catch(console.error)
   }, [])
 
-  const categories = [...new Set(todos.map(t => t.category).filter(Boolean))] as string[]
+  // Replay queued operations when back online
+  const sync = useCallback(async () => {
+    const queue = getQueue()
+    if (queue.length === 0) return
+    setSyncing(true)
+    try {
+      // id mapping: tempId → real server id (for creates)
+      const idMap = new Map<number, number>()
 
-  const filtered = activeCategory
-    ? todos.filter(t => t.category === activeCategory)
-    : todos
+      for (const op of queue) {
+        if (op.type === 'create') {
+          const created = await createTodo(op.data)
+          idMap.set(op.tempId, created.id)
+          // replace temp id in local state
+          setTodos(prev => prev.map(t => t.id === op.tempId ? created : t))
+        }
+        if (op.type === 'update') {
+          const realId = idMap.get(op.id) ?? op.id
+          const updated = await updateTodo(realId, op.data)
+          setTodos(prev => prev.map(t => t.id === realId ? updated : t))
+        }
+        if (op.type === 'delete') {
+          const realId = idMap.get(op.id) ?? op.id
+          await deleteTodo(realId)
+        }
+      }
+      clearQueue()
+      setPendingOps(0)
+    } catch (err) {
+      console.error('Sync failed', err)
+    } finally {
+      setSyncing(false)
+    }
+  }, [])
 
-  const blockedCount = todos.filter(t => t.status === 'BLOCKED' || t.status === 'ON_HOLD').length
+  useEffect(() => {
+    if (isOnline) sync()
+  }, [isOnline, sync])
 
-  useNotifications(todos)
+  function track(op: QueuedOp) {
+    enqueue(op)
+    setPendingOps(getQueue().length)
+  }
 
   async function handleToggle(todo: Todo) {
     const next = todo.status === 'DONE' ? 'TODO' : 'DONE'
-    const updated = await updateTodo(todo.id, { status: next })
-    setTodos(prev => prev.map(t => (t.id === todo.id ? updated : t)))
+    // optimistic
+    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, status: next } : t))
+    try {
+      const updated = await updateTodo(todo.id, { status: next })
+      setTodos(prev => prev.map(t => t.id === todo.id ? updated : t))
+    } catch {
+      track({ type: 'update', id: todo.id, data: { status: next } })
+    }
   }
 
   async function handleDelete(id: number) {
-    await deleteTodo(id)
+    // optimistic
     setTodos(prev => prev.filter(t => t.id !== id))
+    try {
+      await deleteTodo(id)
+    } catch {
+      track({ type: 'delete', id })
+    }
   }
 
   async function handleAdd(data: CreateTodo) {
-    const todo = await createTodo(data)
-    setTodos(prev => [...prev, todo])
+    const tid = tempId()
+    const optimistic: Todo = {
+      id: tid, title: data.title, category: data.category ?? null,
+      user_id: auth?.sub ?? null, is_recurrent: data.is_recurrent ?? false,
+      recurrency: data.recurrency ?? null, status: data.status ?? 'TODO',
+    }
+    // optimistic
+    setTodos(prev => [...prev, optimistic])
+    try {
+      const created = await createTodo(data)
+      setTodos(prev => prev.map(t => t.id === tid ? created : t))
+    } catch {
+      track({ type: 'create', tempId: tid, data })
+    }
   }
 
   const greeting = () => {
@@ -60,15 +124,16 @@ export default function OverviewPage() {
     return 'Good evening'
   }
 
+  const categories = [...new Set(todos.map(t => t.category).filter(Boolean))] as string[]
+  const filtered = activeCategory ? todos.filter(t => t.category === activeCategory) : todos
+  const blockedCount = todos.filter(t => t.status === 'BLOCKED' || t.status === 'ON_HOLD').length
+
   const viewTitle: Record<View, string> = {
-    overview:   `${greeting()}, ${auth?.nickname ?? 'there'}!`,
-    categories: 'Categories',
-    analytics:  'Analytics',
-    users:      'Users',
+    overview: '', categories: 'Categories', analytics: 'Analytics', users: 'Users',
   }
 
   return (
-    <div className="flex flex-col min-h-dvh pb-24">
+    <div className="flex flex-col min-h-dvh pb-fab-safe">
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -88,7 +153,7 @@ export default function OverviewPage() {
       )}
 
       {/* top bar */}
-      <header className="flex items-center justify-between px-5 pt-10 pb-2">
+      <header className="flex items-center justify-between px-5 pt-header-safe pb-2">
         <button onClick={() => setSidebarOpen(true)} className="text-white p-1">
           <Menu size={22} />
         </button>
@@ -111,6 +176,53 @@ export default function OverviewPage() {
         </div>
       </header>
 
+      {/* offline banner */}
+      {!isOnline && (
+        <div className="mx-5 mt-3 flex items-center gap-3 px-4 py-3 rounded-2xl bg-yellow-400/10 border border-yellow-400/30">
+          <WifiOff size={16} className="text-yellow-400 shrink-0" />
+          <p className="text-yellow-400 text-xs font-medium flex-1">
+            You're offline — changes will sync when reconnected
+            {pendingOps > 0 && ` (${pendingOps} pending)`}
+          </p>
+        </div>
+      )}
+
+      {/* syncing banner */}
+      {isOnline && syncing && (
+        <div className="mx-5 mt-3 flex items-center gap-3 px-4 py-3 rounded-2xl bg-purple/10 border border-purple/20">
+          <RefreshCw size={16} className="text-purple shrink-0 animate-spin" />
+          <p className="text-purple text-xs font-medium">Syncing offline changes…</p>
+        </div>
+      )}
+
+      {/* pending ops badge (online, not syncing) */}
+      {isOnline && !syncing && pendingOps > 0 && (
+        <button
+          onClick={sync}
+          className="mx-5 mt-3 flex items-center gap-3 px-4 py-3 rounded-2xl bg-purple/10 border border-purple/20"
+        >
+          <RefreshCw size={16} className="text-purple shrink-0" />
+          <p className="text-purple text-xs font-medium flex-1">{pendingOps} change(s) pending sync</p>
+          <span className="text-purple text-xs font-semibold">Sync now</span>
+        </button>
+      )}
+
+      {/* notification permission banner */}
+      {permission === 'prompt' && (
+        <button
+          onClick={requestPermission}
+          className="mx-5 mt-3 flex items-center gap-3 px-4 py-3 rounded-2xl
+            bg-purple/20 border border-purple/30 text-left w-[calc(100%-2.5rem)]"
+        >
+          <span className="text-xl">🔔</span>
+          <div className="flex-1">
+            <p className="text-white text-xs font-semibold">Enable notifications</p>
+            <p className="text-muted text-[11px]">Get reminded about recurring tasks</p>
+          </div>
+          <span className="text-purple text-xs font-medium shrink-0">Allow</span>
+        </button>
+      )}
+
       {/* page title */}
       <div className="px-5 mt-6 mb-8">
         {view === 'overview' ? (
@@ -123,7 +235,6 @@ export default function OverviewPage() {
         )}
       </div>
 
-      {/* overview view */}
       {view === 'overview' && (
         <>
           {categories.length > 0 && (
@@ -131,9 +242,7 @@ export default function OverviewPage() {
               <p className="px-5 text-xs text-muted uppercase tracking-widest mb-3">Categories</p>
               <div className="flex gap-3 px-5 overflow-x-auto scrollbar-none pb-1">
                 {categories.map(cat => (
-                  <CategoryCard
-                    key={cat}
-                    name={cat}
+                  <CategoryCard key={cat} name={cat}
                     count={todos.filter(t => t.category === cat).length}
                     active={activeCategory === cat}
                     onClick={() => setActiveCategory(prev => prev === cat ? null : cat)}
@@ -142,7 +251,6 @@ export default function OverviewPage() {
               </div>
             </section>
           )}
-
           <section className="px-5 flex-1">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs text-muted uppercase tracking-widest">
@@ -169,32 +277,24 @@ export default function OverviewPage() {
         </>
       )}
 
-      {/* categories view */}
       {view === 'categories' && (
         <div className="px-5">
           <CategoriesView todos={todos} onToggle={handleToggle} onDelete={handleDelete} />
         </div>
       )}
 
-      {/* analytics view */}
       {view === 'analytics' && (
-        <div className="px-5">
-          <AnalyticsView todos={todos} />
-        </div>
+        <div className="px-5"><AnalyticsView todos={todos} /></div>
       )}
 
-      {/* users view */}
       {view === 'users' && (
-        <div className="px-5">
-          <UsersView />
-        </div>
+        <div className="px-5"><UsersView /></div>
       )}
 
-      {/* FAB — hide on analytics and users (users has its own FAB) */}
       {view !== 'analytics' && view !== 'users' && (
         <button
           onClick={() => setModalOpen(true)}
-          className="fixed bottom-8 right-6 w-14 h-14 rounded-full flex items-center justify-center
+          className="fixed bottom-fab-safe right-6 w-14 h-14 rounded-full flex items-center justify-center
             bg-pink shadow-lg shadow-pink/40 active:scale-95 transition-transform z-10"
         >
           <Plus size={26} className="text-white" />

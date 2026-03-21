@@ -37,7 +37,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-dvh flex flex-col justify-center px-6 py-12">
+    <div className="min-h-dvh flex flex-col justify-center px-6 py-12 pt-safe pb-safe">
       {/* Logo / title */}
       <div className="mb-12 text-center">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl

@@ -31,14 +31,14 @@ export default function Sidebar({ open, onClose, activeView, onNavigate }: Props
       />
       <aside
         className={`fixed top-0 left-0 h-full w-72 z-30 flex flex-col
-          bg-card px-6 py-10 transition-transform duration-300
+          bg-card px-6 pb-10 pt-safe transition-transform duration-300
           ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <button onClick={onClose} className="absolute top-5 right-5 text-muted hover:text-white">
           <X size={20} />
         </button>
 
-        <div className="flex flex-col items-center gap-3 mb-10">
+        <div className="flex flex-col items-center gap-3 mb-10 mt-10">
           <div className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold
             bg-linear-to-br from-purple to-pink text-white ring-4 ring-purple/30">
             {initials}

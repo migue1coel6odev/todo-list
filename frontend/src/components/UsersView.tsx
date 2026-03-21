@@ -40,7 +40,7 @@ export default function UsersView() {
 
       <button
         onClick={() => setModalOpen(true)}
-        className="fixed bottom-8 right-6 w-14 h-14 rounded-full flex items-center justify-center
+        className="fixed bottom-fab-safe right-6 w-14 h-14 rounded-full flex items-center justify-center
           bg-pink shadow-lg shadow-pink/40 active:scale-95 transition-transform z-10"
       >
         <Plus size={26} className="text-white" />
@@ -75,7 +75,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60">
-      <div className="w-full max-w-[430px] bg-card rounded-t-3xl p-6 pb-10">
+      <div className="w-full max-w-[430px] bg-card rounded-t-3xl p-6 pb-modal-safe">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-white font-semibold text-lg">New User</h2>
           <button onClick={onClose} className="text-muted hover:text-white">

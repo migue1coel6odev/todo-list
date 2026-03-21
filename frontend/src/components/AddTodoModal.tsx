@@ -24,7 +24,7 @@ export default function AddTodoModal({ onClose, onAdd }: Props) {
   const cronValid = !recurrency || isValidCron(recurrency)
   const cronPreview = recurrency && isValidCron(recurrency) ? describeCron(recurrency) : null
 
-  function submit(e: React.FormEvent) {
+  function submit(e: { preventDefault(): void }) {
     e.preventDefault()
     if (!title.trim()) return
     if (isRecurrent && recurrency && !isValidCron(recurrency)) return
@@ -39,7 +39,7 @@ export default function AddTodoModal({ onClose, onAdd }: Props) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60">
-      <div className="w-full max-w-[430px] bg-card rounded-t-3xl p-6 pb-10">
+      <div className="w-full max-w-[430px] bg-card rounded-t-3xl p-6 pb-modal-safe">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-white font-semibold text-lg">New Task</h2>
           <button onClick={onClose} className="text-muted hover:text-white">

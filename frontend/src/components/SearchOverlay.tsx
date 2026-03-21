@@ -24,7 +24,7 @@ export default function SearchOverlay({ query, onChange, onClose, todos, onToggl
 
   return (
     <div className="fixed inset-0 z-40 bg-navy flex flex-col">
-      <div className="flex items-center gap-3 px-5 pt-10 pb-4">
+      <div className="flex items-center gap-3 px-5 pt-header-safe pb-4">
         <input
           ref={inputRef}
           value={query}
