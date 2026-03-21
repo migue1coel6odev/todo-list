@@ -26,7 +26,8 @@ const MIGRATIONS: &[M] = &[
 ];
 
 pub fn init() -> rusqlite::Result<Connection> {
-    let mut conn = Connection::open("todos.db")?;
+    std::fs::create_dir_all("data").expect("Failed to create data directory");
+    let mut conn = Connection::open("data/todos.db")?;
     Migrations::new(MIGRATIONS.to_vec())
         .to_latest(&mut conn)
         .expect("Failed to run migrations");
