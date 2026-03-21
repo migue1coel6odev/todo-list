@@ -1,5 +1,5 @@
 # Stage 1: Build Rust backend
-FROM rust:slim-bookworm AS rust-builder
+FROM docker.io/rust:slim-bookworm AS rust-builder
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY backend/src ./src
 RUN touch src/main.rs && cargo build --release
 
 # Stage 2: Build frontend
-FROM oven/bun:latest AS frontend-builder
+FROM docker.io/oven/bun:latest AS frontend-builder
 
 WORKDIR /app
 
@@ -23,7 +23,7 @@ COPY frontend/ ./
 RUN bun run build
 
 # Stage 3: Final image
-FROM debian:bookworm-slim
+FROM docker.io/debian:bookworm-slim
 
 WORKDIR /app
 
