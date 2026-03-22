@@ -1,14 +1,16 @@
-import { X, LayoutGrid, Tag, BarChart2, Users, Settings, LogOut } from 'lucide-react'
+import { X, LayoutGrid, BookMarked, Share2, Tag, BarChart2, UserCog, Settings, LogOut } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
-export type View = 'overview' | 'categories' | 'analytics' | 'users' | 'settings'
+export type View = 'overview' | 'my-tasks' | 'shared' | 'categories' | 'analytics' | 'users' | 'settings'
 
 const NAV: { icon: typeof LayoutGrid; label: string; view: View; adminOnly?: boolean }[] = [
-  { icon: LayoutGrid, label: 'Overview',   view: 'overview'   },
-  { icon: Tag,        label: 'Categories', view: 'categories' },
-  { icon: BarChart2,  label: 'Analytics',  view: 'analytics'  },
-  { icon: Users,      label: 'Users',      view: 'users',     adminOnly: true },
-  { icon: Settings,   label: 'Settings',   view: 'settings'   },
+  { icon: LayoutGrid,  label: 'Overview',   view: 'overview'    },
+  { icon: BookMarked,  label: 'My Tasks',   view: 'my-tasks'    },
+  { icon: Share2,      label: 'Shared',     view: 'shared'      },
+  { icon: Tag,         label: 'Categories', view: 'categories'  },
+  { icon: BarChart2,   label: 'Analytics',  view: 'analytics'   },
+  { icon: UserCog,     label: 'Users',      view: 'users',      adminOnly: true },
+  { icon: Settings,    label: 'Settings',   view: 'settings'    },
 ]
 
 interface Props {

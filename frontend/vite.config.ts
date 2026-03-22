@@ -41,10 +41,11 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       proxy: {
-        '/auth':  apiUrl,
-        '/todos': apiUrl,
-        '/users': apiUrl,
-        '/push':  apiUrl,
+        '/auth':       apiUrl,
+        '/todos':      apiUrl,
+        '/users':      apiUrl,
+        '/categories': apiUrl,
+        '/push':       apiUrl,
       },
     },
   }

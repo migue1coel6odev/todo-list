@@ -11,7 +11,7 @@ const STATUSES: { key: Todo['status']; label: string; color: string }[] = [
 
 export default function AnalyticsView({ todos }: Props) {
   const total = todos.length
-  const categories = [...new Set(todos.map(t => t.category).filter(Boolean))] as string[]
+  const categories = [...new Set(todos.map(t => t.category_name).filter(Boolean))] as string[]
 
   return (
     <div className="flex flex-col gap-6">
@@ -69,8 +69,8 @@ export default function AnalyticsView({ todos }: Props) {
           <p className="text-xs text-muted uppercase tracking-widest mb-3">By Category</p>
           <div className="flex flex-col gap-2">
             {categories.map(cat => {
-              const count = todos.filter(t => t.category === cat).length
-              const done  = todos.filter(t => t.category === cat && t.status === 'DONE').length
+              const count = todos.filter(t => t.category_name === cat).length
+              const done  = todos.filter(t => t.category_name === cat && t.status === 'DONE').length
               return (
                 <div key={cat} className="flex items-center justify-between bg-card2 px-4 py-3 rounded-xl">
                   <span className="text-sm text-white font-medium">#{cat}</span>

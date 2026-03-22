@@ -5,15 +5,25 @@ use axum::{
     Json, Router,
 };
 use bcrypt::{hash, DEFAULT_COST};
+use serde::Serialize;
+
 use crate::{
     extractor::AuthUser,
     models::{CreateUser, UpdateUser, User, UserRole},
     AppState,
 };
 
+#[derive(Serialize)]
+struct RosterEntry {
+    id: i64,
+    nickname: String,
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_users).post(create_user))
+        // /roster must be registered before /{id} so the literal path wins
+        .route("/roster", get(user_roster))
         .route("/{id}", get(get_user).put(update_user).delete(delete_user))
 }
 
@@ -139,4 +149,21 @@ async fn delete_user(
         Ok(_) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
+}
+
+/// Minimal user list accessible to any authenticated user — used for category member search.
+async fn user_roster(
+    State(db): State<AppState>,
+    _auth: AuthUser,
+) -> Result<Json<Vec<RosterEntry>>, StatusCode> {
+    let conn = db.lock().unwrap();
+    let mut stmt = conn
+        .prepare("SELECT id, nickname FROM users ORDER BY nickname")
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let entries = stmt
+        .query_map([], |row| Ok(RosterEntry { id: row.get(0)?, nickname: row.get(1)? }))
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(Json(entries))
 }

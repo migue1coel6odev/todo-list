@@ -39,10 +39,11 @@ async fn main() {
         .not_found_service(ServeFile::new("public/index.html"));
 
     let app = axum::Router::new()
-        .nest("/auth",  routes::auth::router())
-        .nest("/todos", routes::todos::router())
-        .nest("/users", routes::users::router())
-        .nest("/push",  routes::push::router())
+        .nest("/auth",       routes::auth::router())
+        .nest("/todos",      routes::todos::router())
+        .nest("/users",      routes::users::router())
+        .nest("/categories", routes::categories::router())
+        .nest("/push",       routes::push::router())
         .fallback_service(serve_dir)
         .layer(axum::Extension(vapid))
         .layer(cors)

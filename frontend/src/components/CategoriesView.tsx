@@ -15,10 +15,16 @@ const STATUS_COLOR: Record<Todo['status'], string> = {
 }
 
 export default function CategoriesView({ todos, onToggle, onDelete }: Props) {
-  const uncategorized = todos.filter(t => !t.category)
-  const categories = [...new Set(todos.map(t => t.category).filter(Boolean))] as string[]
+  const uncategorized = todos.filter(t => !t.category_id)
+  const categoryNames = [
+    ...new Set(todos.filter(t => t.category_name).map(t => t.category_name!)),
+  ]
+
   const groups = [
-    ...categories.map(cat => ({ name: cat, items: todos.filter(t => t.category === cat) })),
+    ...categoryNames.map(name => ({
+      name,
+      items: todos.filter(t => t.category_name === name),
+    })),
     ...(uncategorized.length ? [{ name: 'Uncategorized', items: uncategorized }] : []),
   ]
 
@@ -35,7 +41,8 @@ export default function CategoriesView({ todos, onToggle, onDelete }: Props) {
             <div className="flex flex-col gap-2">
               {group.items.map(todo => (
                 <div key={todo.id} className="flex items-center gap-2">
-                  <TaskItem todo={todo}
+                  <TaskItem
+                    todo={todo}
                     onToggle={() => onToggle(todo)}
                     onDelete={() => onDelete(todo.id)}
                   />

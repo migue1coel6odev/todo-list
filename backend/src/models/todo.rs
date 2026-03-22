@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Status {
     Todo,
@@ -38,17 +38,21 @@ impl TryFrom<String> for Status {
 pub struct Todo {
     pub id: i64,
     pub title: String,
-    pub category: Option<String>,
+    pub category_id: Option<i64>,
+    pub category_name: Option<String>,
+    pub category_owner_id: Option<i64>,
+    pub category_is_shared: bool,
     pub user_id: Option<i64>,
     pub is_recurrent: bool,
     pub recurrency: Option<String>,
     pub status: Status,
+    pub last_completed_date: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct CreateTodo {
     pub title: String,
-    pub category: Option<String>,
+    pub category_id: Option<i64>,
     pub is_recurrent: Option<bool>,
     pub recurrency: Option<String>,
     pub status: Option<Status>,
@@ -57,7 +61,7 @@ pub struct CreateTodo {
 #[derive(Deserialize)]
 pub struct UpdateTodo {
     pub title: Option<String>,
-    pub category: Option<String>,
+    pub category_id: Option<i64>,
     pub is_recurrent: Option<bool>,
     pub recurrency: Option<String>,
     pub status: Option<Status>,

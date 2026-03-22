@@ -36,8 +36,8 @@ export default function TaskItem({ todo, onToggle, onDelete }: Props) {
         <span className={`text-sm font-medium ${done ? 'line-through text-muted' : 'text-white'}`}>
           {todo.title}
         </span>
-        {todo.category && (
-          <span className="ml-2 text-xs text-purple font-normal">#{todo.category}</span>
+        {todo.category_name && (
+          <span className="ml-2 text-xs text-purple font-normal">#{todo.category_name}</span>
         )}
         {todo.is_recurrent && todo.recurrency && (
           <p className="flex items-center gap-1.5 text-[11px] text-muted mt-0.5">

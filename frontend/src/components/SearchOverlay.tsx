@@ -19,7 +19,7 @@ export default function SearchOverlay({ query, onChange, onClose, todos, onToggl
 
   const results = query.trim()
     ? todos.filter(t => t.title.toLowerCase().includes(query.toLowerCase())
-        || t.category?.toLowerCase().includes(query.toLowerCase()))
+        || t.category_name?.toLowerCase().includes(query.toLowerCase()))
     : []
 
   return (

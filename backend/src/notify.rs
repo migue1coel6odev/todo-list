@@ -69,7 +69,8 @@ pub async fn run(db: Arc<Mutex<Connection>>, vapid: Arc<VapidConfig>) {
             let conn = db.lock().unwrap();
             let mut stmt = match conn.prepare(
                 "SELECT id, title, recurrency, user_id FROM todos
-                 WHERE is_recurrent = 1 AND recurrency IS NOT NULL AND status != 'DONE'",
+                 WHERE is_recurrent = 1 AND recurrency IS NOT NULL
+                   AND NOT (status = 'DONE' AND last_completed_date = date('now', 'localtime'))",
             ) {
                 Ok(s) => s,
                 Err(e) => {

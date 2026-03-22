@@ -1,24 +1,51 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Menu, Search, Bell, Plus, WifiOff, RefreshCw } from 'lucide-react'
 import { getTodos, updateTodo, deleteTodo, createTodo } from '../api/todos'
-import type { Todo, CreateTodo } from '../types'
+import { getCategories } from '../api/categories'
+import type { Category, CreateTodo, Todo } from '../types'
 import { useAuth } from '../context/AuthContext'
+import { matchesToday, nextOccurrence } from '../utils/cron'
 import Sidebar, { type View } from '../components/Sidebar'
-import CategoryCard from '../components/CategoryCard'
 import TaskItem from '../components/TaskItem'
 import AddTodoModal from '../components/AddTodoModal'
 import SearchOverlay from '../components/SearchOverlay'
 import CategoriesView from '../components/CategoriesView'
+import CategoriesManageView from '../components/CategoriesManageView'
 import AnalyticsView from '../components/AnalyticsView'
 import UsersView from '../components/UsersView'
 import SettingsView from '../components/SettingsView'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import { enqueue, getQueue, clearQueue, tempId, type QueuedOp } from '../utils/offlineQueue'
 
+// Sort by urgency: non-recurring first, then recurring matching today, then by next occurrence.
+// DONE always sinks to the bottom.
+function sortByUrgency(todos: Todo[]): Todo[] {
+  return [...todos].sort((a, b) => {
+    const aDone = a.status === 'DONE'
+    const bDone = b.status === 'DONE'
+    if (aDone !== bDone) return aDone ? 1 : -1
+    if (aDone && bDone) return 0
+
+    if (!a.is_recurrent && b.is_recurrent) return -1
+    if (a.is_recurrent && !b.is_recurrent) return 1
+
+    if (a.is_recurrent && b.is_recurrent) {
+      const aToday = a.recurrency ? matchesToday(a.recurrency) : false
+      const bToday = b.recurrency ? matchesToday(b.recurrency) : false
+      if (aToday !== bToday) return aToday ? -1 : 1
+      const aNext = a.recurrency ? (nextOccurrence(a.recurrency)?.getTime() ?? Infinity) : Infinity
+      const bNext = b.recurrency ? (nextOccurrence(b.recurrency)?.getTime() ?? Infinity) : Infinity
+      return aNext - bNext
+    }
+
+    return 0
+  })
+}
+
 export default function OverviewPage() {
   const { auth } = useAuth()
   const [todos, setTodos] = useState<Todo[]>([])
-  const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [categories, setCategories] = useState<Category[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -31,22 +58,19 @@ export default function OverviewPage() {
 
   useEffect(() => {
     getTodos().then(setTodos).catch(console.error)
+    getCategories().then(setCategories).catch(console.error)
   }, [])
 
-  // Replay queued operations when back online
   const sync = useCallback(async () => {
     const queue = getQueue()
     if (queue.length === 0) return
     setSyncing(true)
     try {
-      // id mapping: tempId → real server id (for creates)
       const idMap = new Map<number, number>()
-
       for (const op of queue) {
         if (op.type === 'create') {
           const created = await createTodo(op.data)
           idMap.set(op.tempId, created.id)
-          // replace temp id in local state
           setTodos(prev => prev.map(t => t.id === op.tempId ? created : t))
         }
         if (op.type === 'update') {
@@ -79,7 +103,6 @@ export default function OverviewPage() {
 
   async function handleToggle(todo: Todo) {
     const next = todo.status === 'DONE' ? 'TODO' : 'DONE'
-    // optimistic
     setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, status: next } : t))
     try {
       const updated = await updateTodo(todo.id, { status: next })
@@ -90,7 +113,6 @@ export default function OverviewPage() {
   }
 
   async function handleDelete(id: number) {
-    // optimistic
     setTodos(prev => prev.filter(t => t.id !== id))
     try {
       await deleteTodo(id)
@@ -101,12 +123,20 @@ export default function OverviewPage() {
 
   async function handleAdd(data: CreateTodo) {
     const tid = tempId()
+    const cat = data.category_id ? categories.find(c => c.id === data.category_id) : null
     const optimistic: Todo = {
-      id: tid, title: data.title, category: data.category ?? null,
-      user_id: auth?.sub ?? null, is_recurrent: data.is_recurrent ?? false,
-      recurrency: data.recurrency ?? null, status: data.status ?? 'TODO',
+      id: tid,
+      title: data.title,
+      category_id: data.category_id ?? null,
+      category_name: cat?.name ?? null,
+      category_owner_id: cat?.owner_id ?? null,
+      category_is_shared: cat?.is_shared ?? false,
+      user_id: auth?.sub ?? null,
+      is_recurrent: data.is_recurrent ?? false,
+      recurrency: data.recurrency ?? null,
+      status: data.status ?? 'TODO',
+      last_completed_date: null,
     }
-    // optimistic
     setTodos(prev => [...prev, optimistic])
     try {
       const created = await createTodo(data)
@@ -123,13 +153,20 @@ export default function OverviewPage() {
     return 'Good evening'
   }
 
-  const categories = [...new Set(todos.map(t => t.category).filter(Boolean))] as string[]
-  const filtered = activeCategory ? todos.filter(t => t.category === activeCategory) : todos
+  // View-specific todo sets
+  const overviewTodos = sortByUrgency(todos)
+  const myTodos = sortByUrgency(todos.filter(t => !t.category_is_shared))
+  const sharedTodos = todos.filter(t => t.category_is_shared)
+  const sharedCategoryNames = [...new Set(sharedTodos.map(t => t.category_name).filter(Boolean))] as string[]
+
   const blockedCount = todos.filter(t => t.status === 'BLOCKED' || t.status === 'ON_HOLD').length
 
   const viewTitle: Record<View, string> = {
-    overview: '', categories: 'Categories', analytics: 'Analytics', users: 'Users', settings: 'Settings',
+    overview: '', 'my-tasks': 'My Tasks', shared: 'Shared', categories: 'Categories',
+    analytics: 'Analytics', users: 'Users', settings: 'Settings',
   }
+
+  const showFab = !['analytics', 'users', 'settings', 'categories'].includes(view)
 
   return (
     <div className="flex flex-col min-h-dvh pb-fab-safe">
@@ -137,7 +174,7 @@ export default function OverviewPage() {
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         activeView={view}
-        onNavigate={v => { setView(v); setActiveCategory(null) }}
+        onNavigate={v => setView(v)}
       />
 
       {searchOpen && (
@@ -161,7 +198,7 @@ export default function OverviewPage() {
             <Search size={20} />
           </button>
           <button
-            onClick={() => { setView('settings'); setActiveCategory(null) }}
+            onClick={() => setView('settings')}
             className="hover:text-white transition-colors relative"
           >
             <Bell size={20} />
@@ -186,7 +223,6 @@ export default function OverviewPage() {
         </div>
       )}
 
-      {/* syncing banner */}
       {isOnline && syncing && (
         <div className="mx-5 mt-3 flex items-center gap-3 px-4 py-3 rounded-2xl bg-purple/10 border border-purple/20">
           <RefreshCw size={16} className="text-purple shrink-0 animate-spin" />
@@ -194,7 +230,6 @@ export default function OverviewPage() {
         </div>
       )}
 
-      {/* pending ops badge (online, not syncing) */}
       {isOnline && !syncing && pendingOps > 0 && (
         <button
           onClick={sync}
@@ -218,53 +253,80 @@ export default function OverviewPage() {
         )}
       </div>
 
+      {/* ── Overview: all todos sorted by urgency ── */}
       {view === 'overview' && (
-        <>
-          {categories.length > 0 && (
-            <section className="mb-8">
-              <p className="px-5 text-xs text-muted uppercase tracking-widest mb-3">Categories</p>
-              <div className="flex gap-3 px-5 overflow-x-auto scrollbar-none pb-1">
-                {categories.map(cat => (
-                  <CategoryCard key={cat} name={cat}
-                    count={todos.filter(t => t.category === cat).length}
-                    active={activeCategory === cat}
-                    onClick={() => setActiveCategory(prev => prev === cat ? null : cat)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-          <section className="px-5 flex-1">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-muted uppercase tracking-widest">
-                {activeCategory ?? "Today's tasks"}
-              </p>
-              <span className="text-xs text-purple font-medium">{filtered.length} tasks</span>
+        <section className="px-5 flex-1">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-muted uppercase tracking-widest">Most urgent</p>
+            <span className="text-xs text-purple font-medium">
+              {overviewTodos.filter(t => t.status !== 'DONE').length} remaining
+            </span>
+          </div>
+          {overviewTodos.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted text-sm gap-2">
+              <span className="text-4xl">✓</span>
+              <p>All done! Add a new task.</p>
             </div>
-            {filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-muted text-sm gap-2">
-                <span className="text-4xl">✓</span>
-                <p>All done! Add a new task.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {filtered.map(todo => (
-                  <TaskItem key={todo.id} todo={todo}
-                    onToggle={() => handleToggle(todo)}
-                    onDelete={() => handleDelete(todo.id)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        </>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {overviewTodos.map(todo => (
+                <TaskItem key={todo.id} todo={todo}
+                  onToggle={() => handleToggle(todo)}
+                  onDelete={() => handleDelete(todo.id)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
-      {view === 'categories' && (
-        <div className="px-5">
-          <CategoriesView todos={todos} onToggle={handleToggle} onDelete={handleDelete} />
+      {/* ── My Tasks: private todos ── */}
+      {view === 'my-tasks' && (
+        <section className="px-5 flex-1">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-muted uppercase tracking-widest">Private tasks</p>
+            <span className="text-xs text-purple font-medium">
+              {myTodos.filter(t => t.status !== 'DONE').length} remaining
+            </span>
+          </div>
+          {myTodos.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted text-sm gap-2">
+              <span className="text-4xl">✓</span>
+              <p>No private tasks.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {myTodos.map(todo => (
+                <TaskItem key={todo.id} todo={todo}
+                  onToggle={() => handleToggle(todo)}
+                  onDelete={() => handleDelete(todo.id)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Shared: todos grouped by shared category ── */}
+      {view === 'shared' && (
+        <div className="px-5 flex-1">
+          {sharedCategoryNames.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted text-sm gap-2">
+              <span className="text-4xl">🤝</span>
+              <p>No shared categories yet.</p>
+              <p className="text-xs text-center">Go to Categories to share one with teammates.</p>
+            </div>
+          ) : (
+            <CategoriesView
+              todos={sharedTodos}
+              onToggle={handleToggle}
+              onDelete={handleDelete}
+            />
+          )}
         </div>
       )}
+
+      {view === 'categories' && <CategoriesManageView />}
 
       {view === 'analytics' && (
         <div className="px-5"><AnalyticsView todos={todos} /></div>
@@ -274,11 +336,9 @@ export default function OverviewPage() {
         <div className="px-5"><UsersView /></div>
       )}
 
-      {view === 'settings' && (
-        <SettingsView />
-      )}
+      {view === 'settings' && <SettingsView />}
 
-      {view !== 'analytics' && view !== 'users' && view !== 'settings' && (
+      {showFab && (
         <button
           onClick={() => setModalOpen(true)}
           className="fixed bottom-fab-safe right-6 w-14 h-14 rounded-full flex items-center justify-center
@@ -288,7 +348,14 @@ export default function OverviewPage() {
         </button>
       )}
 
-      {modalOpen && <AddTodoModal onClose={() => setModalOpen(false)} onAdd={handleAdd} />}
+      {modalOpen && (
+        <AddTodoModal
+          categories={categories}
+          onClose={() => setModalOpen(false)}
+          onAdd={handleAdd}
+          onCategoryCreated={cat => setCategories(prev => [...prev, cat])}
+        />
+      )}
     </div>
   )
 }

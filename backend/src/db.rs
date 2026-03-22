@@ -3,36 +3,42 @@ use rusqlite::Connection;
 use rusqlite_migration::{Migrations, M};
 
 const MIGRATIONS: &[M] = &[
-    M::up(
-        "CREATE TABLE todos (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            title        TEXT    NOT NULL,
-            category     TEXT,
-            user_id      INTEGER,
-            is_recurrent INTEGER NOT NULL DEFAULT 0,
-            recurrency   TEXT,
-            status       TEXT    NOT NULL DEFAULT 'TODO'
-        );",
-    ),
-    M::up(
-        "CREATE TABLE users (
-            id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            nickname TEXT    NOT NULL UNIQUE,
-            email    TEXT    NOT NULL UNIQUE,
-            password TEXT    NOT NULL,
-            role     TEXT    NOT NULL DEFAULT 'USER'
-        );",
-    ),
-    M::up(
-        "CREATE TABLE push_subscriptions (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            endpoint   TEXT    NOT NULL UNIQUE,
-            p256dh     TEXT    NOT NULL,
-            auth       TEXT    NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );",
-    ),
+    M::up("CREATE TABLE users (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        nickname TEXT    NOT NULL UNIQUE,
+        email    TEXT    NOT NULL UNIQUE,
+        password TEXT    NOT NULL,
+        role     TEXT    NOT NULL DEFAULT 'USER'
+    );"),
+    M::up("CREATE TABLE categories (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL,
+        owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );"),
+    M::up("CREATE TABLE category_members (
+        category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (category_id, user_id)
+    );"),
+    M::up("CREATE TABLE todos (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        title               TEXT    NOT NULL,
+        category_id         INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+        user_id             INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        is_recurrent        INTEGER NOT NULL DEFAULT 0,
+        recurrency          TEXT,
+        status              TEXT    NOT NULL DEFAULT 'TODO',
+        last_completed_date TEXT
+    );"),
+    M::up("CREATE TABLE push_subscriptions (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        endpoint   TEXT    NOT NULL UNIQUE,
+        p256dh     TEXT    NOT NULL,
+        auth       TEXT    NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );"),
 ];
 
 pub fn init() -> rusqlite::Result<Connection> {
