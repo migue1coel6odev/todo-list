@@ -1,13 +1,14 @@
-import { X, LayoutGrid, Tag, BarChart2, Users, LogOut } from 'lucide-react'
+import { X, LayoutGrid, Tag, BarChart2, Users, Settings, LogOut } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
-export type View = 'overview' | 'categories' | 'analytics' | 'users'
+export type View = 'overview' | 'categories' | 'analytics' | 'users' | 'settings'
 
 const NAV: { icon: typeof LayoutGrid; label: string; view: View; adminOnly?: boolean }[] = [
   { icon: LayoutGrid, label: 'Overview',   view: 'overview'   },
   { icon: Tag,        label: 'Categories', view: 'categories' },
   { icon: BarChart2,  label: 'Analytics',  view: 'analytics'  },
-  { icon: Users,      label: 'Users',      view: 'users', adminOnly: true },
+  { icon: Users,      label: 'Users',      view: 'users',     adminOnly: true },
+  { icon: Settings,   label: 'Settings',   view: 'settings'   },
 ]
 
 interface Props {

@@ -11,7 +11,7 @@ import SearchOverlay from '../components/SearchOverlay'
 import CategoriesView from '../components/CategoriesView'
 import AnalyticsView from '../components/AnalyticsView'
 import UsersView from '../components/UsersView'
-import { useNotifications } from '../hooks/useNotifications'
+import SettingsView from '../components/SettingsView'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import { enqueue, getQueue, clearQueue, tempId, type QueuedOp } from '../utils/offlineQueue'
 
@@ -28,7 +28,6 @@ export default function OverviewPage() {
   const [syncing, setSyncing] = useState(false)
 
   const isOnline = useOnlineStatus()
-  const { permission, requestPermission } = useNotifications(todos)
 
   useEffect(() => {
     getTodos().then(setTodos).catch(console.error)
@@ -129,7 +128,7 @@ export default function OverviewPage() {
   const blockedCount = todos.filter(t => t.status === 'BLOCKED' || t.status === 'ON_HOLD').length
 
   const viewTitle: Record<View, string> = {
-    overview: '', categories: 'Categories', analytics: 'Analytics', users: 'Users',
+    overview: '', categories: 'Categories', analytics: 'Analytics', users: 'Users', settings: 'Settings',
   }
 
   return (
@@ -207,22 +206,6 @@ export default function OverviewPage() {
         </button>
       )}
 
-      {/* notification permission banner */}
-      {permission === 'prompt' && (
-        <button
-          onClick={requestPermission}
-          className="mx-5 mt-3 flex items-center gap-3 px-4 py-3 rounded-2xl
-            bg-purple/20 border border-purple/30 text-left w-[calc(100%-2.5rem)]"
-        >
-          <span className="text-xl">🔔</span>
-          <div className="flex-1">
-            <p className="text-white text-xs font-semibold">Enable notifications</p>
-            <p className="text-muted text-[11px]">Get reminded about recurring tasks</p>
-          </div>
-          <span className="text-purple text-xs font-medium shrink-0">Allow</span>
-        </button>
-      )}
-
       {/* page title */}
       <div className="px-5 mt-6 mb-8">
         {view === 'overview' ? (
@@ -291,7 +274,11 @@ export default function OverviewPage() {
         <div className="px-5"><UsersView /></div>
       )}
 
-      {view !== 'analytics' && view !== 'users' && (
+      {view === 'settings' && (
+        <SettingsView />
+      )}
+
+      {view !== 'analytics' && view !== 'users' && view !== 'settings' && (
         <button
           onClick={() => setModalOpen(true)}
           className="fixed bottom-fab-safe right-6 w-14 h-14 rounded-full flex items-center justify-center

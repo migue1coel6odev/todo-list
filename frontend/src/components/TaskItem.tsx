@@ -1,6 +1,6 @@
 import { Trash2, RefreshCw } from 'lucide-react'
 import type { Todo } from '../types'
-import { describeCron } from '../utils/cron'
+import { describeCron, timeUntilNext } from '../utils/cron'
 
 interface Props {
   todo: Todo
@@ -40,9 +40,15 @@ export default function TaskItem({ todo, onToggle, onDelete }: Props) {
           <span className="ml-2 text-xs text-purple font-normal">#{todo.category}</span>
         )}
         {todo.is_recurrent && todo.recurrency && (
-          <p className="flex items-center gap-1 text-[11px] text-muted mt-0.5">
+          <p className="flex items-center gap-1.5 text-[11px] text-muted mt-0.5">
             <RefreshCw size={10} className="shrink-0" />
             {describeCron(todo.recurrency)}
+            {!done && (() => {
+              const t = timeUntilNext(todo.recurrency!)
+              return t ? (
+                <span className="text-purple font-medium">· {t}</span>
+              ) : null
+            })()}
           </p>
         )}
       </div>

@@ -1,60 +1,84 @@
 import { useEffect, useState } from 'react'
-import type { Todo } from '../types'
-import { matchesToday } from '../utils/cron'
+import { getVapidPublicKey, savePushSubscription, removePushSubscription } from '../api/push'
 
-const todayKey = () => new Date().toISOString().split('T')[0]!
-
-function alreadyNotified(id: number) {
-  return localStorage.getItem(`notified_${id}_${todayKey()}`) === '1'
-}
-function markNotified(id: number) {
-  localStorage.setItem(`notified_${id}_${todayKey()}`, '1')
-}
-
-function showNotification(todo: Todo) {
-  if (Notification.permission !== 'granted') return
-  new Notification('Recurring task due today', {
-    body: todo.title,
-    icon: '/pwa-192x192.png',
-    badge: '/pwa-64x64.png',
-    tag: `todo-${todo.id}`,
-  })
-  markNotified(todo.id)
+/** Convert a base64url VAPID public key to the Uint8Array expected by pushManager.subscribe */
+function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
+  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
+  const raw = atob(padded.replace(/-/g, '+').replace(/_/g, '/'))
+  const arr = new Uint8Array(raw.length)
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i)
+  return arr
 }
 
-function checkTodos(todos: Todo[]) {
-  if (Notification.permission !== 'granted') return
-  todos
-    .filter(t => t.is_recurrent && t.recurrency && t.status !== 'DONE')
-    .forEach(todo => {
-      if (!alreadyNotified(todo.id) && matchesToday(todo.recurrency!)) {
-        showNotification(todo)
-      }
-    })
+function isPushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window
 }
 
-export type NotificationState = 'unsupported' | 'granted' | 'denied' | 'prompt'
+export type PushState = 'unsupported' | 'loading' | 'prompt' | 'subscribed' | 'denied'
 
-export function useNotifications(todos: Todo[]) {
-  const [permission, setPermission] = useState<NotificationState>(() => {
-    if (!('Notification' in window)) return 'unsupported'
-    return Notification.permission as NotificationState
-  })
+export function useNotifications() {
+  const [state, setState] = useState<PushState>('loading')
 
-  // Check todos whenever permission becomes granted or todos change
+  // On mount: check current subscription status
   useEffect(() => {
-    if (permission !== 'granted') return
-    checkTodos(todos)
-    const id = setInterval(() => checkTodos(todos), 60 * 60 * 1000)
-    return () => clearInterval(id)
-  }, [permission, todos])
+    if (!isPushSupported()) {
+      setState('unsupported')
+      return
+    }
+    if (Notification.permission === 'denied') {
+      setState('denied')
+      return
+    }
+    navigator.serviceWorker.ready
+      .then(reg => reg.pushManager.getSubscription())
+      .then(sub => setState(sub ? 'subscribed' : 'prompt'))
+      .catch(() => setState('prompt'))
+  }, [])
 
-  // Must be called from a user gesture (button tap)
-  async function requestPermission() {
-    if (!('Notification' in window)) return
-    const result = await Notification.requestPermission()
-    setPermission(result as NotificationState)
+  /** Called from a user gesture — requests permission, subscribes, saves to backend */
+  async function subscribe() {
+    if (!isPushSupported()) return
+    try {
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') {
+        setState(permission === 'denied' ? 'denied' : 'prompt')
+        return
+      }
+
+      const { publicKey } = await getVapidPublicKey()
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      })
+
+      const json = sub.toJSON()
+      await savePushSubscription({
+        endpoint: sub.endpoint,
+        p256dh: json.keys?.['p256dh'] ?? '',
+        auth:   json.keys?.['auth']   ?? '',
+      })
+
+      setState('subscribed')
+    } catch (e) {
+      console.error('[push] subscribe failed:', e)
+    }
   }
 
-  return { permission, requestPermission }
+  async function unsubscribe() {
+    if (!isPushSupported()) return
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        await removePushSubscription(sub.endpoint)
+        await sub.unsubscribe()
+      }
+      setState('prompt')
+    } catch (e) {
+      console.error('[push] unsubscribe failed:', e)
+    }
+  }
+
+  return { state, subscribe, unsubscribe }
 }

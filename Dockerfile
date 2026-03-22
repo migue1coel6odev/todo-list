@@ -3,6 +3,10 @@ FROM docker.io/rust:slim-bookworm AS rust-builder
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends pkg-config libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY backend/Cargo.toml backend/Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs \
     && cargo build --release \
@@ -24,6 +28,10 @@ RUN bun run build
 
 # Stage 3: Final image
 FROM docker.io/debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

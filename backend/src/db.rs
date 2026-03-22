@@ -23,6 +23,16 @@ const MIGRATIONS: &[M] = &[
             role     TEXT    NOT NULL DEFAULT 'USER'
         );",
     ),
+    M::up(
+        "CREATE TABLE push_subscriptions (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            endpoint   TEXT    NOT NULL UNIQUE,
+            p256dh     TEXT    NOT NULL,
+            auth       TEXT    NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );",
+    ),
 ];
 
 pub fn init() -> rusqlite::Result<Connection> {

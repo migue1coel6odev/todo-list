@@ -12,23 +12,14 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'icon.svg', 'apple-touch-icon-180x180.png'],
-        workbox: {
-          runtimeCaching: [
-            {
-              urlPattern: ({ url }: { url: URL }) =>
-                ['/todos', '/users'].some(p => url.pathname.startsWith(p)),
-              handler: 'NetworkFirst' as const,
-              options: {
-                cacheName: 'api-cache',
-                networkTimeoutSeconds: 5,
-                expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
-                cacheableResponse: { statuses: [0, 200] },
-              },
-            },
-          ],
+        injectManifest: {
+          injectionPoint: 'self.__WB_MANIFEST',
         },
+        includeAssets: ['favicon.ico', 'icon.svg', 'apple-touch-icon-180x180.png'],
         manifest: {
           name: 'TodoList',
           short_name: 'Todos',
@@ -53,6 +44,7 @@ export default defineConfig(({ mode }) => {
         '/auth':  apiUrl,
         '/todos': apiUrl,
         '/users': apiUrl,
+        '/push':  apiUrl,
       },
     },
   }
