@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Trash2, RefreshCw } from 'lucide-react'
 import type { Todo } from '../types'
 import { describeCron, timeUntilNext } from '../utils/cron'
@@ -17,6 +18,12 @@ const statusColor: Record<Todo['status'], string> = {
 
 export default function TaskItem({ todo, onToggle, onDelete }: Props) {
   const done = todo.status === 'DONE'
+  const timeUntil = useMemo(
+    () => (!done && todo.is_recurrent && todo.recurrency ? timeUntilNext(todo.recurrency) : null),
+    // recalculate only when recurrency expression or done-state changes, not on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [todo.recurrency, done],
+  )
 
   return (
     <div className="flex items-start gap-4 px-4 py-3 rounded-2xl bg-card2 group w-full">
@@ -43,12 +50,9 @@ export default function TaskItem({ todo, onToggle, onDelete }: Props) {
           <p className="flex items-center gap-1.5 text-[11px] text-muted mt-0.5">
             <RefreshCw size={10} className="shrink-0" />
             {describeCron(todo.recurrency)}
-            {!done && (() => {
-              const t = timeUntilNext(todo.recurrency!)
-              return t ? (
-                <span className="text-purple font-medium">· {t}</span>
-              ) : null
-            })()}
+            {timeUntil && (
+              <span className="text-purple font-medium">· {timeUntil}</span>
+            )}
           </p>
         )}
       </div>

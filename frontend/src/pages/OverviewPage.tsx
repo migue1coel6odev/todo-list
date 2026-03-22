@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Menu, Search, Bell, Plus, WifiOff, RefreshCw } from 'lucide-react'
 import { getTodos, updateTodo, deleteTodo, createTodo } from '../api/todos'
 import { getCategories } from '../api/categories'
@@ -153,10 +153,11 @@ export default function OverviewPage() {
     return 'Good evening'
   }
 
-  // View-specific todo sets
-  const overviewTodos = sortByUrgency(todos)
-  const myTodos = sortByUrgency(todos.filter(t => !t.category_is_shared))
-  const sharedTodos = todos.filter(t => t.category_is_shared)
+  // View-specific todo sets — memoized so sortByUrgency (which calls nextOccurrence) only
+  // re-runs when the todos array actually changes, not on every unrelated render.
+  const overviewTodos = useMemo(() => sortByUrgency(todos), [todos])
+  const myTodos = useMemo(() => sortByUrgency(todos.filter(t => !t.category_is_shared)), [todos])
+  const sharedTodos = useMemo(() => todos.filter(t => t.category_is_shared), [todos])
   const sharedCategoryNames = [...new Set(sharedTodos.map(t => t.category_name).filter(Boolean))] as string[]
 
   const blockedCount = todos.filter(t => t.status === 'BLOCKED' || t.status === 'ON_HOLD').length
