@@ -19,13 +19,11 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const { token } = await login(email, password)
-      signIn(token)
-
-      // fetch nickname after sign-in
+      // Store token first so apiFetch can authenticate the /users/:id call
+      localStorage.setItem('token', token)
       const payload = JSON.parse(atob(token.split('.')[1]!))
       const user = await getMe(payload.sub as number)
       localStorage.setItem('nickname', user.nickname)
-      // patch auth state with nickname via re-signIn
       signIn(token)
 
       navigate('/', { replace: true })

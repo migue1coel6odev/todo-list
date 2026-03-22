@@ -28,7 +28,7 @@ async fn get_public_key(Extension(vapid): Extension<Arc<VapidConfig>>) -> Json<V
 
 async fn subscribe(
     State(db): State<AppState>,
-    _auth: AuthUser,
+    auth: AuthUser,
     Json(body): Json<PushSubscribeRequest>,
 ) -> Result<StatusCode, StatusCode> {
     let conn = db.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -36,7 +36,7 @@ async fn subscribe(
         "INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
          VALUES (?1, ?2, ?3, ?4)
          ON CONFLICT(endpoint) DO UPDATE SET user_id = ?1, p256dh = ?3, auth = ?4",
-        rusqlite::params![_auth.0.sub, body.endpoint, body.p256dh, body.auth],
+        rusqlite::params![auth.0.sub, body.endpoint, body.p256dh, body.auth],
     )
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::CREATED)

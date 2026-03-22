@@ -161,7 +161,7 @@ export default function OverviewPage() {
             <Search size={20} />
           </button>
           <button
-            onClick={() => { setView('analytics'); setActiveCategory(null) }}
+            onClick={() => { setView('settings'); setActiveCategory(null) }}
             className="hover:text-white transition-colors relative"
           >
             <Bell size={20} />
