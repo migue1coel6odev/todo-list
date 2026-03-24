@@ -59,7 +59,7 @@ export default function TaskItem({ todo, onToggle, onDelete }: Props) {
 
       <button
         onClick={onDelete}
-        className="opacity-0 group-hover:opacity-100 text-muted hover:text-pink transition-all mt-0.5 shrink-0"
+        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 text-muted hover:text-pink transition-all mt-0.5 shrink-0"
       >
         <Trash2 size={15} />
       </button>

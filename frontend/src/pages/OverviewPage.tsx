@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Menu, Search, Bell, Plus, WifiOff, RefreshCw } from 'lucide-react'
 import { getTodos, updateTodo, deleteTodo, createTodo } from '../api/todos'
 import { getCategories } from '../api/categories'
@@ -15,7 +15,7 @@ import AnalyticsView from '../components/AnalyticsView'
 import UsersView from '../components/UsersView'
 import SettingsView from '../components/SettingsView'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
-import { enqueue, getQueue, clearQueue, tempId, type QueuedOp } from '../utils/offlineQueue'
+import { enqueue, getQueue, dequeueFirst, tempId, type QueuedOp } from '../utils/offlineQueue'
 
 // Sort by urgency: non-recurring first, then recurring matching today, then by next occurrence.
 // DONE always sinks to the bottom.
@@ -53,6 +53,7 @@ export default function OverviewPage() {
   const [view, setView] = useState<View>('overview')
   const [pendingOps, setPendingOps] = useState(() => getQueue().length)
   const [syncing, setSyncing] = useState(false)
+  const syncingRef = useRef(false)
 
   const isOnline = useOnlineStatus()
 
@@ -62,34 +63,35 @@ export default function OverviewPage() {
   }, [])
 
   const sync = useCallback(async () => {
+    if (syncingRef.current) return
     const queue = getQueue()
     if (queue.length === 0) return
+    syncingRef.current = true
     setSyncing(true)
-    try {
-      const idMap = new Map<number, number>()
-      for (const op of queue) {
+    const idMap = new Map<number, number>()
+    for (const op of queue) {
+      try {
         if (op.type === 'create') {
           const created = await createTodo(op.data)
           idMap.set(op.tempId, created.id)
           setTodos(prev => prev.map(t => t.id === op.tempId ? created : t))
-        }
-        if (op.type === 'update') {
+        } else if (op.type === 'update') {
           const realId = idMap.get(op.id) ?? op.id
           const updated = await updateTodo(realId, op.data)
           setTodos(prev => prev.map(t => t.id === realId ? updated : t))
-        }
-        if (op.type === 'delete') {
+        } else if (op.type === 'delete') {
           const realId = idMap.get(op.id) ?? op.id
           await deleteTodo(realId)
         }
+        dequeueFirst()
+        setPendingOps(getQueue().length)
+      } catch (err) {
+        console.error('Sync failed at op', op, err)
+        break
       }
-      clearQueue()
-      setPendingOps(0)
-    } catch (err) {
-      console.error('Sync failed', err)
-    } finally {
-      setSyncing(false)
     }
+    syncingRef.current = false
+    setSyncing(false)
   }, [])
 
   useEffect(() => {
@@ -327,7 +329,14 @@ export default function OverviewPage() {
         </div>
       )}
 
-      {view === 'categories' && <CategoriesManageView />}
+      {view === 'categories' && (
+        <CategoriesManageView
+          onChanged={() => {
+            getCategories().then(setCategories).catch(console.error)
+            getTodos().then(setTodos).catch(console.error)
+          }}
+        />
+      )}
 
       {view === 'analytics' && (
         <div className="px-5"><AnalyticsView todos={todos} /></div>

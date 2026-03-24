@@ -38,6 +38,7 @@ export function useNotifications() {
   /** Called from a user gesture — requests permission, subscribes, saves to backend */
   async function subscribe() {
     if (!isPushSupported()) return
+    setState('loading')
     try {
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') {
@@ -62,11 +63,13 @@ export function useNotifications() {
       setState('subscribed')
     } catch (e) {
       console.error('[push] subscribe failed:', e)
+      setState('prompt')
     }
   }
 
   async function unsubscribe() {
     if (!isPushSupported()) return
+    setState('loading')
     try {
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.getSubscription()
@@ -77,6 +80,7 @@ export function useNotifications() {
       setState('prompt')
     } catch (e) {
       console.error('[push] unsubscribe failed:', e)
+      setState('subscribed')
     }
   }
 

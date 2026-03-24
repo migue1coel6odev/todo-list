@@ -12,7 +12,7 @@ import {
 } from '../api/categories'
 import { useAuth } from '../context/AuthContext'
 
-export default function CategoriesManageView() {
+export default function CategoriesManageView({ onChanged }: { onChanged?: () => void }) {
   const { auth } = useAuth()
   const [categories, setCategories] = useState<Category[]>([])
   const [roster, setRoster] = useState<UserRoster[]>([])
@@ -38,6 +38,7 @@ export default function CategoriesManageView() {
       const cat = await createCategory(newName.trim())
       setCategories(prev => [...prev, cat])
       setNewName('')
+      onChanged?.()
     } catch (err) {
       console.error(err)
     }
@@ -49,6 +50,7 @@ export default function CategoriesManageView() {
       const updated = await updateCategory(id, editName.trim())
       setCategories(prev => prev.map(c => c.id === id ? updated : c))
       setEditingId(null)
+      onChanged?.()
     } catch (err) {
       console.error(err)
     }
@@ -59,6 +61,7 @@ export default function CategoriesManageView() {
       await deleteCategory(id)
       setCategories(prev => prev.filter(c => c.id !== id))
       if (expanded === id) setExpanded(null)
+      onChanged?.()
     } catch (err) {
       console.error(err)
     }
@@ -72,6 +75,7 @@ export default function CategoriesManageView() {
       setCategories(prev => prev.map(c => c.id === categoryId ? updated : c))
       setAddingMemberFor(null)
       setSelectedUserId('')
+      onChanged?.()
     } catch (err) {
       console.error(err)
     }
@@ -85,6 +89,7 @@ export default function CategoriesManageView() {
           ? { ...c, members: c.members.filter(m => m.user_id !== userId), is_shared: c.members.length > 1 }
           : c,
       ))
+      onChanged?.()
     } catch (err) {
       console.error(err)
     }
@@ -95,6 +100,7 @@ export default function CategoriesManageView() {
     try {
       await removeCategoryMember(categoryId, auth.sub)
       setCategories(prev => prev.filter(c => c.id !== categoryId))
+      onChanged?.()
     } catch (err) {
       console.error(err)
     }
