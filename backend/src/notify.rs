@@ -63,14 +63,13 @@ pub async fn run(db: Arc<Mutex<Connection>>, vapid: Arc<VapidConfig>) {
         let minute_key = now.format("%Y-%m-%d-%H-%M").to_string();
         println!("[notify] Tick at {}", now.format("%Y-%m-%d %H:%M"));
 
-        // 1. Find recurring non-done todos whose cron fires right now
-        // Fetch id, title, recurrency, user_id — we match on recurrency but notify with title
-        let candidates: Vec<(i64, String, i64)> = {
+        // 1. Find all recurring todos whose cron fires right now (DONE or TODO)
+        // When the cron fires for a DONE task it means a new occurrence is due — reset it.
+        let candidates: Vec<(i64, String, bool, i64)> = {
             let conn = db.lock().unwrap();
             let mut stmt = match conn.prepare(
-                "SELECT id, title, recurrency, user_id FROM todos
-                 WHERE is_recurrent = 1 AND recurrency IS NOT NULL
-                   AND NOT (status = 'DONE' AND last_completed_date = date('now', 'localtime'))",
+                "SELECT id, title, status, recurrency, user_id FROM todos
+                 WHERE is_recurrent = 1 AND recurrency IS NOT NULL",
             ) {
                 Ok(s) => s,
                 Err(e) => {
@@ -83,8 +82,9 @@ pub async fn run(db: Arc<Mutex<Connection>>, vapid: Arc<VapidConfig>) {
                 Ok((
                     row.get::<_, i64>(0)?,
                     row.get::<_, String>(1)?,   // title
-                    row.get::<_, String>(2)?,   // recurrency (for matching)
-                    row.get::<_, i64>(3)?,      // user_id
+                    row.get::<_, String>(2)?,   // status
+                    row.get::<_, String>(3)?,   // recurrency (for cron matching)
+                    row.get::<_, i64>(4)?,      // user_id
                 ))
             }) {
                 Ok(r) => r,
@@ -95,20 +95,32 @@ pub async fn run(db: Arc<Mutex<Connection>>, vapid: Arc<VapidConfig>) {
             };
 
             rows.filter_map(|r| r.ok())
-                .filter(|(id, _, recurrency, _)| {
+                .filter(|(id, _, _, recurrency, _)| {
                     !notified.contains(&(*id, minute_key.clone())) && matches_now(recurrency)
                 })
-                .map(|(id, title, _, user_id)| (id, title, user_id))
+                .map(|(id, title, status, _, user_id)| (id, title, status == "DONE", user_id))
                 .collect()
         };
+
+        // 2. Reset any DONE tasks whose cron just fired — a new occurrence is due
+        for (todo_id, _, is_done, _) in &candidates {
+            if *is_done {
+                let conn = db.lock().unwrap();
+                conn.execute(
+                    "UPDATE todos SET status = 'TODO', last_completed_date = NULL WHERE id = ?1",
+                    rusqlite::params![todo_id],
+                ).ok();
+                println!("[notify] Reset todo {todo_id} to TODO (new occurrence due)");
+            }
+        }
 
         println!("[notify] {} recurring todo(s) match now", candidates.len());
         if candidates.is_empty() {
             continue;
         }
 
-        // 2. For each due todo, send push to all of the owner's subscriptions
-        for (todo_id, title, user_id) in &candidates {
+        // 3. Send push notifications for all matched todos
+        for (todo_id, title, _, user_id) in &candidates {
             let subs: Vec<(String, String, String)> = {
                 let conn = db.lock().unwrap();
                 let mut stmt = match conn.prepare(

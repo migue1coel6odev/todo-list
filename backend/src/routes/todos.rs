@@ -97,16 +97,6 @@ async fn list_todos(
     auth: AuthUser,
 ) -> Result<Json<Vec<Todo>>, StatusCode> {
     let conn = db.lock().unwrap();
-    let today = Local::now().format("%Y-%m-%d").to_string();
-
-    // Reset recurring todos whose DONE state is from a previous day
-    conn.execute(
-        "UPDATE todos SET status = 'TODO'
-         WHERE is_recurrent = 1 AND status = 'DONE'
-           AND (last_completed_date IS NULL OR last_completed_date != ?1)",
-        [&today],
-    )
-    .ok();
 
     let todos = if auth.is_admin() {
         let mut stmt = conn
@@ -230,7 +220,7 @@ async fn update_todo(
         if existing.is_recurrent {
             match v {
                 Status::Done => {
-                    // Record today so the task resets tomorrow
+                    // Record completion date (task resets when the cron fires again)
                     let today = Local::now().format("%Y-%m-%d").to_string();
                     conn.execute(
                         "UPDATE todos SET status = 'DONE', last_completed_date = ?1 WHERE id = ?2",
